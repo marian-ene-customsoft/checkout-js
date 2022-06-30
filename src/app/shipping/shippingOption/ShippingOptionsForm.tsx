@@ -71,6 +71,8 @@ class ShippingOptionsForm extends PureComponent<ShippingOptionsFormProps & Formi
                             onSelectedOption={ selectShippingOption }
                             selectedShippingOptionId={ consignment.selectedShippingOption && consignment.selectedShippingOption.id }
                             shippingOptions={ consignment.availableShippingOptions }
+                            shippingAddress={consignments[0].shippingAddress}
+                            config={this.props?.config?.storeProfile}
                         />
 
                         { (!consignment.availableShippingOptions || !consignment.availableShippingOptions.length) &&
