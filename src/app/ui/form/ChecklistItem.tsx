@@ -15,6 +15,7 @@ export interface ChecklistItemProps {
     isDisabled?: boolean;
     label: ReactNode | ((isSelected: boolean) => ReactNode);
     value: string;
+    onClick?(value: any): void;
 }
 
 const ChecklistItem: FunctionComponent<ChecklistItemProps> = ({
@@ -23,6 +24,7 @@ const ChecklistItem: FunctionComponent<ChecklistItemProps> = ({
     content,
     htmlId = kebabCase(value),
     label,
+    onClick,
     ...rest
 }) => {
     const { name = '' } = useContext(ChecklistContext) || {};
@@ -34,6 +36,7 @@ const ChecklistItem: FunctionComponent<ChecklistItemProps> = ({
             id={ htmlId }
             isSelected={ field.value === value }
             value={ value }
+            onClick={onClick}
         >
             { label instanceof Function ?
                 label(isSelected) :

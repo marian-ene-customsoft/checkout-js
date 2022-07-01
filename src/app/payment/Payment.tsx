@@ -16,6 +16,7 @@ import mapToOrderRequestBody from './mapToOrderRequestBody';
 import { getUniquePaymentMethodId, PaymentMethodId, PaymentMethodProviderType } from './paymentMethod';
 import PaymentContext from './PaymentContext';
 import PaymentForm, { PaymentFormValues } from './PaymentForm';
+import { Address } from '@bigcommerce/checkout-sdk';
 
 export interface PaymentProps {
     isEmbedded?: boolean;
@@ -53,6 +54,7 @@ interface WithCheckoutPaymentProps {
     loadCheckout(): Promise<CheckoutSelectors>;
     loadPaymentMethods(): Promise<CheckoutSelectors>;
     submitOrder(values: OrderRequestBody): Promise<CheckoutSelectors>;
+    updateShippingAddress(address: Partial<Address>): Promise<CheckoutSelectors>;
 }
 
 interface PaymentState {
@@ -380,6 +382,8 @@ class Payment extends Component<PaymentProps & WithCheckoutPaymentProps & WithLa
             onSubmit = noop,
             onSubmitError = noop,
             submitOrder,
+            updateShippingAddress,
+            loadCheckout
         } = this.props;
 
         const {
@@ -395,20 +399,36 @@ class Payment extends Component<PaymentProps & WithCheckoutPaymentProps & WithLa
             return customSubmit(values);
         }
 
-        try {
-            const state = await submitOrder(mapToOrderRequestBody(values, isPaymentDataRequired()));
-            const order = state.data.getOrder();
-            onSubmit(order?.orderId);
-        } catch (error) {
-            if (error.type === 'payment_method_invalid') {
-                return loadPaymentMethods();
-            }
+        const lockerString = localStorage.getItem('lockerData');
+        if (lockerString?.length) {
+            try {
+                const lockerData = JSON.parse(lockerString);
+                let state = await loadCheckout();
+                const oldAddress = state?.data?.getShippingAddress();
+                await updateShippingAddress({...oldAddress,
+                    countryCode: lockerData.countryCode,
+                    city: lockerData.localityName,
+                    address1: lockerData.addressText,
+                    stateOrProvince: lockerData.countyName,
+                    postalCode: lockerData.postalCode
+                });
 
-            if (isCartChangedError(error)) {
-                return onCartChangedError(error);
-            }
+                state = await submitOrder(mapToOrderRequestBody(values, isPaymentDataRequired()));
+                const order = state.data.getOrder();
+                localStorage.removeItem('lockerData');
+                onSubmit(order?.orderId);
 
-            onSubmitError(error);
+            } catch (error) {
+                if (error.type === 'payment_method_invalid') {
+                    return loadPaymentMethods();
+                }
+    
+                if (isCartChangedError(error)) {
+                    return onCartChangedError(error);
+                }
+    
+                onSubmitError(error);
+            }
         }
     };
 
@@ -540,6 +560,11 @@ export function mapToPaymentProps({
         filteredMethods = filteredMethods;
     }
 
+    const lockerString = localStorage.getItem('lockerData');
+    if (lockerString?.length) {
+        filteredMethods = methods.filter((method: PaymentMethod) => method.id !== 'cod');
+    }
+
     return {
         applyStoreCredit: checkoutService.applyStoreCredit,
         availableStoreCredit: customer.storeCredit,
@@ -560,6 +585,7 @@ export function mapToPaymentProps({
         shouldLocaliseErrorMessages: features['PAYMENTS-6799.localise_checkout_payment_error_messages'],
         submitOrder: checkoutService.submitOrder,
         submitOrderError: getSubmitOrderError(),
+        updateShippingAddress: checkoutService.updateShippingAddress,
         termsConditionsText: isTermsConditionsRequired && termsConditionsType === TermsConditionsType.TextArea ?
             termsCondtitionsText :
             undefined,

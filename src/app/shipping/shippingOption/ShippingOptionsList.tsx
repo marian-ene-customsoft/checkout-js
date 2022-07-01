@@ -1,5 +1,5 @@
 import { ShippingOption, StoreProfile } from '@bigcommerce/checkout-sdk';
-import React, { memo, useCallback, FunctionComponent, useState } from 'react';
+import React, { memo, useCallback, FunctionComponent, useState, useEffect } from 'react';
 
 import { EMPTY_ARRAY } from '../../common/utility';
 import { TranslatedString } from '../../locale';
@@ -13,11 +13,13 @@ import StaticShippingOption from './StaticShippingOption';
 interface ShippingOptionListItemProps {
     consignmentId: string;
     shippingOption: ShippingOption;
+    onClick(option: ShippingOption):void;
 }
 
 const ShippingOptionListItem: FunctionComponent<ShippingOptionListItemProps> = ({
     consignmentId,
     shippingOption,
+    onClick
 }) => {
     const renderLabel = useCallback(() => (
         <div className="shippingOptionLabel">
@@ -29,6 +31,7 @@ const ShippingOptionListItem: FunctionComponent<ShippingOptionListItemProps> = (
         htmlId={ `shippingOptionRadio-${consignmentId}-${shippingOption.id}` }
         label={ renderLabel }
         value={ shippingOption.id }
+        onClick={onClick}
     />;
 };
 
@@ -51,19 +54,35 @@ const ShippingOptionsList: FunctionComponent<ShippingOptionListProps> = ({
     selectedShippingOptionId,
     onSelectedOption,
     shippingAddress,
-    config
+    config,
  }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [innoshipData, setInnoshipData] = useState({} as LockersMapProps);
 
+    useEffect(() => {
+        const lockerString = localStorage.getItem('lockerData');
+        if (!lockerString?.length && selectedShippingOptionId?.length && shippingOptions?.length) {
+            const shippingOption = shippingOptions?.filter((option: ShippingOption) => option.id === selectedShippingOptionId);
+            if (shippingOption?.length) {
+                onShippingOptionListItemClick(shippingOption[0]);
+            }
+        }
+    },[]);
+
     const handleSelect = useCallback(async (value: string) => {
-        console.log(shippingOptions, value);
-        //console.log('CART: ', cart);
-        const option = shippingOptions?.filter((item: any) => item.id === value);
-        if (option?.length) {
-            const [courier, service] = option[0].description.split(' ');
-            console.log(`Courier: ${courier} / Service: ${service}`);
-            //console.log('Store CONFIG!!', getStoreConfig());
+        onSelectedOption(consignmentId, value);
+    }, [
+        consignmentId,
+        onSelectedOption,
+    ]);
+
+    const onShippingOptionListItemClick = async (option: ShippingOption) => {
+        if (option) {
+            const [courier, service] = option.description.split(' ');
+
+            if (`${service}`.toLowerCase() !== 'lockers') return;
+
+            localStorage.removeItem('lockerData');
 
             let countryCode = '';
             let city = '';
@@ -81,7 +100,7 @@ const ShippingOptionsList: FunctionComponent<ShippingOptionListProps> = ({
             }
 
 
-            const locationsData = await fetch(`http://localhost:3000/api/shipping/lockers`, {
+            const locationsData = await fetch(`https://bc-innoship.customsoft.dev/api/shipping/lockers`, {
                 method: 'POST',
                 body: JSON.stringify({
                   storeHash: storeHash,
@@ -94,19 +113,13 @@ const ShippingOptionsList: FunctionComponent<ShippingOptionListProps> = ({
 
             try {
                 const locations = await locationsData.json();
-                console.log('LOCATIONS: ', locations);
-                setInnoshipData({api_key: locations.api_key, lockers: locations.lockers})
+                setInnoshipData({apiKey: locations.google_maps_api_key, lockers: locations.lockers, google: null, address: shippingAddress, closeModal: ()=>{}})
                 setIsOpen(true);
             } catch (e) {
                 console.log(e);
             }
         }
-
-        onSelectedOption(consignmentId, value);
-    }, [
-        consignmentId,
-        onSelectedOption,
-    ]);
+    }
 
     if (!shippingOptions.length) {
         return null;
@@ -126,18 +139,43 @@ const ShippingOptionsList: FunctionComponent<ShippingOptionListProps> = ({
                         consignmentId={ consignmentId }
                         key={ shippingOption.id }
                         shippingOption={ shippingOption }
+                        onClick={() => onShippingOptionListItemClick(shippingOption)}
                     />
                 )) }
             </Checklist>
         </LoadingOverlay>
-        <Modal
+        <Modal style={{
+                overlay: {
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(255, 255, 255, 0.75)'
+                },
+                content: {
+                top: '40px',
+                left: '40px',
+                right: '40px',
+                bottom: '40px',
+                border: '1px solid #ccc',
+                background: '#fff',
+                overflow: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                borderRadius: '4px',
+                outline: 'none',
+                padding: '20px',
+                minHeight: '95%',
+                minWidth: '95%'
+                }
+            }}
             additionalBodyClassName="modal-body--center"
             closeButtonLabel={ <TranslatedString id="common.close_action" /> }
             isOpen={ isOpen }
-            shouldShowCloseButton={ true }
+            shouldShowCloseButton={ false }
             onRequestClose={ () => setIsOpen(false) }
         >
-        <LockersMap api_key={innoshipData.api_key} lockers={innoshipData.lockers} />
+        <LockersMap {...{apiKey: innoshipData.apiKey, lockers: innoshipData.lockers, address: innoshipData.address, closeModal: () => setIsOpen(false) }} />
       </Modal>
         </>
     );
