@@ -399,36 +399,42 @@ class Payment extends Component<PaymentProps & WithCheckoutPaymentProps & WithLa
             return customSubmit(values);
         }
 
-        const lockerString = localStorage.getItem('lockerData');
-        if (lockerString?.length) {
-            try {
-                const lockerData = JSON.parse(lockerString);
-                let state = await loadCheckout();
-                const oldAddress = state?.data?.getShippingAddress();
-                await updateShippingAddress({...oldAddress,
-                    countryCode: lockerData.countryCode,
-                    city: lockerData.localityName,
-                    address1: lockerData.addressText,
-                    stateOrProvince: lockerData.countyName,
-                    postalCode: lockerData.postalCode
-                });
+        try {
+            const lockerString = localStorage.getItem('lockerData');
+            
+            if (lockerString?.length) {
+                    const lockerData = JSON.parse(lockerString);
+                    let state = await loadCheckout();
+                    const oldAddress = state?.data?.getShippingAddress();
+                    await updateShippingAddress({...oldAddress,
+                        countryCode: lockerData.countryCode,
+                        city: lockerData.localityName,
+                        address1: lockerData.addressText,
+                        stateOrProvince: lockerData.countyName,
+                        postalCode: lockerData.postalCode
+                    });
 
-                state = await submitOrder(mapToOrderRequestBody(values, isPaymentDataRequired()));
+                    state = await submitOrder(mapToOrderRequestBody(values, isPaymentDataRequired()));
+                    const order = state.data.getOrder();
+                    localStorage.removeItem('lockerData');
+                    onSubmit(order?.orderId);
+
+            } else {
+                const state = await submitOrder(mapToOrderRequestBody(values, isPaymentDataRequired()));
                 const order = state.data.getOrder();
                 localStorage.removeItem('lockerData');
                 onSubmit(order?.orderId);
-
-            } catch (error) {
-                if (error.type === 'payment_method_invalid') {
-                    return loadPaymentMethods();
-                }
-    
-                if (isCartChangedError(error)) {
-                    return onCartChangedError(error);
-                }
-    
-                onSubmitError(error);
             }
+        } catch (error) {
+            if (error.type === 'payment_method_invalid') {
+                return loadPaymentMethods();
+            }
+
+            if (isCartChangedError(error)) {
+                return onCartChangedError(error);
+            }
+
+            onSubmitError(error);
         }
     };
 
