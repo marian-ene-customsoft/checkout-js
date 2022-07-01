@@ -529,7 +529,18 @@ class Checkout extends Component<CheckoutProps & WithCheckoutProps & WithLanguag
         const { steps } = this.props;
 
         const newHasSelectedShippingOptions = hasSelectedShippingOptions(data.getConsignments() || []);
+        //console.log('data', newHasSelectedShippingOptions)
 
+        let hasValidLocker = true;
+        if (!localStorage.getItem('lockerData')?.length) {
+            const shippingOption = data.getSelectedShippingOption();
+            if (shippingOption?.description?.toLowerCase()?.includes('lockers')) {
+                hasValidLocker = false;
+            }
+        }
+        if (!hasValidLocker) {
+            this.navigateToStep(CheckoutStepType.Shipping);
+        } else 
         if (prevHasSelectedShippingOptions &&
             !newHasSelectedShippingOptions &&
             findIndex(steps, { type: CheckoutStepType.Shipping }) < findIndex(steps, { type: activeStepType })
